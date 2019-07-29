@@ -2,6 +2,7 @@ import io
 import glob
 import os
 import conllu
+import random
 from pathlib import Path
 
 
@@ -14,21 +15,33 @@ def load_encodings(file_name):
         data[tokens[0]] = map(float, tokens[1:])
     return data
 
-# def parse_conllu():
-#     # some_file.py
-#     import sys
-#     # insert at 1, 0 is the script path (or '' in REPL)
-#     sys.path.insert(1, '/path/to/application/app/folder')
-#
-#     import file
+
+def load_unordered_data(path_to_data):
+    data_file = open(path_to_data, "r", encoding="utf-8")
+    corpus = list(conllu.parse_incr(data_file))
+    corpus_as_words_and_tags = {}
+    for sentence in corpus:
+        words = []
+        tags = []
+        for entry in sentence:
+            word = entry["form"]
+            tag = entry["xpostag"]
+            words.append(word)
+            tags.append(tag)
+        words = tuple(words)
+        tags = tuple(tags)
+        corpus_as_words_and_tags[words] = tags
+
+    return corpus_as_words_and_tags
 
 
 if __name__ == '__main__':
-    data_file = open("./ud-treebanks-v2.4/UD_English-ESL/en_esl-ud-train.conllu", "r", encoding="utf-8")
-    training_set = list(conllu.parse_tree_incr(data_file))
-    my_token = training_set[16]
-    sentence_as_dict = my_token.token
-    print(sentence_as_dict)
+    path_to_data = "./ud-treebanks-v2.4/UD_English-EWT/en_ewt-ud-train.conllu"
+    corpus = load_unordered_data(path_to_data)
+    print(random.choice(list(corpus.items())))
+
+
+
 
 
     # pretrained_encodings = load_encodings("wiki-news-300d-1M.vec")
