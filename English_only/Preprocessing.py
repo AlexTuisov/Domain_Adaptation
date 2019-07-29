@@ -1,8 +1,14 @@
 import io
 import conllu
 import pandas as pd
+import numpy as np
 from conll_df import conll_df
 from sklearn.model_selection import train_test_split
+from sklearn.metrics.pairwise import cosine_similarity
+from torch.utils.data import Dataset, DataLoader
+import time
+
+BATCH_SIZE = 20
 
 
 def load_encodings(file_name):
@@ -40,22 +46,40 @@ def load_data_as_pandas(path_to_data):
 
 
 def load_train_test_validation_sets(path_to_data):
-    train_test, test_set = train_test_split(load_data_as_pandas(path_to_data), test_size=0.2)
-    return train_test, test_set
+    train_test, validation_set = train_test_split(load_data_as_pandas(path_to_data), test_size=0.2)
+    return train_test, validation_set
+
+
+class WordsDataset(Dataset):
+    def __init__(self, dataframe, mode=None):
+        self.data = dataframe
+        self.mode = mode
+        if mode == "tensor":
+            self.encoding = load_encodings("wiki-news-300d-1M.vec")
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        return self.data.iloc[index]
 
 
 if __name__ == '__main__':
+    t = time.time()
     path_to_data = "./ud-treebanks-v2.4/UD_English-EWT/en_ewt-ud-train.conllu"
     x, y = load_train_test_validation_sets(path_to_data)
-    print(x.iloc[0])
-    print("_________")
-    print(y.iloc[0])
+    my_dataset = WordsDataset(x)
+    dataloader = DataLoader(my_dataset, batch_size=BATCH_SIZE, num_workers=4)
+
+    d = time.time()
+    print(f"time elapsed: {d-t} seconds")
 
 
+    pretrained_encodings = load_encodings("wiki-news-300d-1M.vec")
+    p = time.time()
+    print(f"time elapsed: {p-t} seconds")
+    x = np.asarray(list(pretrained_encodings["theft"])).reshape(1, -1)
+    y = np.asarray(list(pretrained_encodings["burglary"])).reshape(1, -1)
+    print(cosine_similarity(x, y))
 
-
-
-
-    # pretrained_encodings = load_encodings("wiki-news-300d-1M.vec")
-    # print(pretrained_encodings["cat"])
 
