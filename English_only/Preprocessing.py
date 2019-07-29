@@ -6,6 +6,7 @@ from conll_df import conll_df
 from sklearn.model_selection import train_test_split
 from sklearn.metrics.pairwise import cosine_similarity
 from torch.utils.data import Dataset, DataLoader
+from gensim.models.wrappers import FastText
 import time
 
 BATCH_SIZE = 20
@@ -51,11 +52,10 @@ def load_train_test_validation_sets(path_to_data):
 
 
 class WordsDataset(Dataset):
-    def __init__(self, dataframe, mode=None):
+    def __init__(self, dataframe, path_to_model, mode=None):
         self.data = dataframe
         self.mode = mode
-        if mode == "tensor":
-            self.encoding = load_encodings("wiki-news-300d-1M.vec")
+        self.model = FastText.load_fasttext_format(path_to_model)
 
     def __len__(self):
         return len(self.data)
@@ -67,19 +67,19 @@ class WordsDataset(Dataset):
 if __name__ == '__main__':
     t = time.time()
     path_to_data = "./ud-treebanks-v2.4/UD_English-EWT/en_ewt-ud-train.conllu"
+    path_to_model = "cc.en.300.bin"
     x, y = load_train_test_validation_sets(path_to_data)
-    my_dataset = WordsDataset(x)
+    my_dataset = WordsDataset(x, path_to_model)
     dataloader = DataLoader(my_dataset, batch_size=BATCH_SIZE, num_workers=4)
 
     d = time.time()
     print(f"time elapsed: {d-t} seconds")
 
-
-    pretrained_encodings = load_encodings("wiki-news-300d-1M.vec")
+    for similar_word in my_dataset.model.similar_by_word("Avihay"):
+        print("Word: {0}, Similarity: {1:.2}f".format(
+            similar_word[0], similar_word[1]))
     p = time.time()
     print(f"time elapsed: {p-t} seconds")
-    x = np.asarray(list(pretrained_encodings["theft"])).reshape(1, -1)
-    y = np.asarray(list(pretrained_encodings["burglary"])).reshape(1, -1)
-    print(cosine_similarity(x, y))
+
 
 
