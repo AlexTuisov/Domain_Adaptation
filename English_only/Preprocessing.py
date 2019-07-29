@@ -1,9 +1,8 @@
 import io
-import glob
-import os
 import conllu
-import random
-from pathlib import Path
+import pandas as pd
+from conll_df import conll_df
+from sklearn.model_selection import train_test_split
 
 
 def load_encodings(file_name):
@@ -19,7 +18,7 @@ def load_encodings(file_name):
 def load_unordered_data(path_to_data):
     data_file = open(path_to_data, "r", encoding="utf-8")
     corpus = list(conllu.parse_incr(data_file))
-    corpus_as_words_and_tags = {}
+    corpus_as_words_and_tags = []
     for sentence in corpus:
         words = []
         tags = []
@@ -30,15 +29,28 @@ def load_unordered_data(path_to_data):
             tags.append(tag)
         words = tuple(words)
         tags = tuple(tags)
-        corpus_as_words_and_tags[words] = tags
-
+        corpus_as_words_and_tags.append((words, tags))
     return corpus_as_words_and_tags
+
+
+def load_data_as_pandas(path_to_data):
+    df = pd.DataFrame(load_unordered_data(path_to_data))
+    df.columns = ["words", "tags"]
+    return df
+
+
+def load_train_test_validation_sets(path_to_data):
+    train_test, test_set = train_test_split(load_data_as_pandas(path_to_data), test_size=0.2)
+    return train_test, test_set
 
 
 if __name__ == '__main__':
     path_to_data = "./ud-treebanks-v2.4/UD_English-EWT/en_ewt-ud-train.conllu"
-    corpus = load_unordered_data(path_to_data)
-    print(random.choice(list(corpus.items())))
+    x, y = load_train_test_validation_sets(path_to_data)
+    print(x.iloc[0])
+    print("_________")
+    print(y.iloc[0])
+
 
 
 
