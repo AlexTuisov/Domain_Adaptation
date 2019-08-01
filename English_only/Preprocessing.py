@@ -1,23 +1,16 @@
-import io
 import time
-import conllu
+import random
+
+
 import pandas as pd
 from gensim.models.wrappers import FastText
 from sklearn.model_selection import train_test_split
-from torch.utils.data import Dataset, DataLoader
-import random
+from torch.utils.data import Dataset
+import conllu
+
 
 BATCH_SIZE = 20
-
-
-def load_encodings(file_name):
-    fin = io.open(file_name, 'r', encoding='utf-8', newline='\n', errors='ignore')
-    n, d = map(int, fin.readline().split())
-    data = {}
-    for line in fin:
-        tokens = line.rstrip().split(' ')
-        data[tokens[0]] = map(float, tokens[1:])
-    return data
+BOOTSTRAPPING_FACTOR = 2
 
 
 def load_unordered_data(path_to_data):
@@ -41,14 +34,16 @@ def load_unordered_data(path_to_data):
 
 
 def load_data_as_pandas(path_to_data):
-    df, tag_set = pd.DataFrame(load_unordered_data(path_to_data))
+    df, tag_set = load_unordered_data(path_to_data)
+    df = pd.DataFrame(df)
     df.columns = ["words", "tags"]
     return df, tag_set
 
 
 def load_train_test_validation_sets(path_to_data):
-    train_test, validation_set = train_test_split(load_data_as_pandas(path_to_data), test_size=0.2)
-    return train_test, validation_set
+    my_data, tag_set = load_data_as_pandas(path_to_data)
+    train_test, validation_set = train_test_split(my_data, test_size=0.2)
+    return train_test, validation_set, tag_set
 
 
 class WordsDataset(Dataset):
@@ -61,37 +56,41 @@ class WordsDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
-    def __getitem__(self, index, bootstrapped=False):
-        return self.data.iloc[index]
+    def __getitem__(self, index):
+        return self.bootstrap_data(self.data.iloc[index])
 
     def bootstrap_data(self, row_to_be_bootstrapped):
         output = []
-        for num_of_errors in range(len(row_to_be_bootstrapped)):
-            output.append(self.change_row(row_to_be_bootstrapped, num_of_errors))
+        for _ in range(BOOTSTRAPPING_FACTOR):
+            for num_of_errors in range(len(row_to_be_bootstrapped[0])):
+                output.append(self.change_row(row_to_be_bootstrapped, num_of_errors))
         return output
 
     def change_row(self, original_row, num_of_errors):
-        #TODO: implement
-        pass
-
+        # original_row = tuple(original_row)
+        if num_of_errors <= 0:
+            return original_row
+        indexes = random.sample(list(range(len(original_row[0]))), num_of_errors)
+        row_to_return = list(original_row)
+        tags = list(row_to_return[1])
+        for index in indexes:
+            tags[index] = random.sample(self.tag_set, 1)[0]
+        row_to_return[1] = tags
+        return tuple(row_to_return)
 
 
 if __name__ == '__main__':
     t = time.time()
-    path_to_data = "./ud-treebanks-v2.4/UD_English-EWT/en_ewt-ud-train.conllu"
+
+    # a_file = open("/home/alex/Desktop/Python_projects/NLP/Optimization_algs/train.wtag", "r")
+    path_to_data = "train.conllu"
     path_to_model = "cc.en.300.bin"
-    x, y = load_train_test_validation_sets(path_to_data)
-    my_dataset = WordsDataset(x, path_to_model)
-    dataloader = DataLoader(my_dataset, batch_size=BATCH_SIZE, num_workers=4)
+    x, y, tag_set = load_train_test_validation_sets(path_to_data)
+    my_dataset = WordsDataset(x, tag_set, path_to_model)
+    # dataloader = DataLoader(my_dataset, batch_size=BATCH_SIZE, num_workers=4)
 
-    d = time.time()
-    print(f"time elapsed: {d-t} seconds")
-
-    for similar_word in my_dataset.model.similar_by_word("cat"):
-        print("Word: {0}, Similarity: {1:.2}".format(
-            similar_word[0], similar_word[1]))
-    p = time.time()
-    print(f"time elapsed: {p-t} seconds")
+    for item in my_dataset[16]:
+        print(item)
 
 
 
