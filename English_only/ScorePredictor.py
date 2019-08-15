@@ -4,23 +4,29 @@ import time
 import math
 import numpy as np
 import Preprocessing as pr
+from gensim.models.wrappers import FastText
 from sklearn.metrics import accuracy_score
 
 PATH_TO_DATA = "train.conllu"
 PATH_TO_MODEL = "cc.en.300.bin"
 NUM_OF_LAYERS = 2
 
-if __name__ == '__main__':
-    x, y, tag_set = pr.load_train_test_validation_sets(PATH_TO_DATA)
-    train_set = pr.WordsDataset(x, tag_set, PATH_TO_MODEL)
-    test_set = pr.WordsDataset(y, tag_set, PATH_TO_MODEL)
 
-    for item in train_set[16]:
-        print(item)
+def create_tensor(row_of_words, row_of_tags, model):
+    list_of_tensors = []
+    for word in row_of_words:
+        try:
+            vector = model[word]
+        except KeyError:
+            print("have a key error there!")
+            print(word)
+        tensor = torch.from_numpy(vector).float()
+        list_of_tensors.append(tensor)
+    output_tensor = torch.cat(list_of_tensors, 0)
+    print(output_tensor)
+    output_tensor = output_tensor.view(len(list_of_tensors), 1, len(list_of_tensors[0]))
 
-
-def create_tensor(row_of_words, row_of_tags):
-    pass
+    return output_tensor
 
 
 def scoring_function(self, state: np.array):
@@ -48,3 +54,13 @@ class GRUPredictor(nn.Module):
         return torch.zeros(NUM_OF_LAYERS, batch_size, self.hidden_size)
 
 
+if __name__ == '__main__':
+    language_model = FastText.load_fasttext_format(PATH_TO_MODEL)
+    x, y, tag_set = pr.load_train_test_validation_sets(PATH_TO_DATA)
+    train_set = pr.WordsDataset(x, tag_set)
+    test_set = pr.WordsDataset(y, tag_set)
+
+    item = train_set[16][0]["words"]
+    print(item)
+    my_little_tensor = create_tensor(item, None, language_model)
+    print(my_little_tensor.shape)

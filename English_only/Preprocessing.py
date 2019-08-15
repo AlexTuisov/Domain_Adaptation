@@ -1,9 +1,6 @@
 import time
 import random
-
-
 import pandas as pd
-from gensim.models.wrappers import FastText
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 import conllu
@@ -47,11 +44,10 @@ def load_train_test_validation_sets(path_to_data):
 
 
 class WordsDataset(Dataset):
-    def __init__(self, dataframe, tag_set, path_to_model, mode=None):
+    def __init__(self, dataframe, tag_set, mode=None):
         self.tag_set = tag_set
         self.data = dataframe
         self.mode = mode
-        self.model = FastText.load_fasttext_format(path_to_model)
 
     def __len__(self):
         return len(self.data)
@@ -84,7 +80,7 @@ if __name__ == '__main__':
     path_to_data = "train.conllu"
     path_to_model = "cc.en.300.bin"
     x, y, tag_set = load_train_test_validation_sets(path_to_data)
-    my_dataset = WordsDataset(x, tag_set, path_to_model)
+    my_dataset = WordsDataset(x, tag_set)
 
     for item in my_dataset[16]:
         print(item)
