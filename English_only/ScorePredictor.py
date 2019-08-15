@@ -27,6 +27,7 @@ def scoring_function(self, state: np.array):
     return accuracy_score(self.encoded_tags, state)
 
 
+
 class GRUPredictor(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(GRUPredictor, self).__init__()
