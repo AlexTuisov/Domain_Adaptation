@@ -60,6 +60,7 @@ if __name__ == '__main__':
     train_set = pr.WordsDataset(x, tag_set)
     test_set = pr.WordsDataset(y, tag_set)
 
+
     item = train_set[16][0]["words"]
     print(item)
     my_little_tensor = create_tensor(item, None, language_model)
