@@ -1,7 +1,6 @@
 # Project exclude paths
 /venv/
 /English_only/wiki-news-300d-1M.vec
-/English_only/Tryout.ipynb
 /English_only/ud-treebanks-v2.4/
 /English_only/ud-tools-v2.4/
 /English_only/ud-documentation-v2.4/

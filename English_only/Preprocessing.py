@@ -80,14 +80,11 @@ class WordsDataset(Dataset):
 
 
 if __name__ == '__main__':
-    t = time.time()
 
-    # a_file = open("/home/alex/Desktop/Python_projects/NLP/Optimization_algs/train.wtag", "r")
     path_to_data = "train.conllu"
     path_to_model = "cc.en.300.bin"
     x, y, tag_set = load_train_test_validation_sets(path_to_data)
     my_dataset = WordsDataset(x, tag_set, path_to_model)
-    # dataloader = DataLoader(my_dataset, batch_size=BATCH_SIZE, num_workers=4)
 
     for item in my_dataset[16]:
         print(item)
