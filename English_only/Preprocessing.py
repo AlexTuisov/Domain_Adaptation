@@ -1,18 +1,42 @@
 import time
+import numpy as np
 import random
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 import conllu
-
+from typing import List
+import os
+import gensim
+import pickle
 
 BATCH_SIZE = 20
 BOOTSTRAPPING_FACTOR = 2
+ALL_TAGS = ['ADJ', 'ADP', 'ADV', 'AUX', 'CCONJ', 'DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON', 'PROPN', 'PUNCT',
+            'SCONJ', 'SYM', 'VERB', 'X']
+
+TAG_TO_INT = {tag: i for i, tag in enumerate(ALL_TAGS)}
+INT_TO_TAG = {v: k for k, v in TAG_TO_INT.items()}
+
+
+class Sentence:
+    def __init__(self, words, tags, encoder):
+        self.words = words
+        self.tags = tags
+        self.X = []
+        for word in words:
+            if word in encoder.wv.vocab:
+                self.X.append(encoder.wv[word])
+            else:
+                self.X.append(np.array(encoder.wv.vector_size))
+        self.Y = np.array([TAG_TO_INT[x] for x in tags])
+
+    def __len__(self):
+        return len(self.words)
 
 
 def load_unordered_data(path_to_data):
     data_file = open(path_to_data, "r", encoding="utf-8")
-    tag_set = set()
     corpus = list(conllu.parse_incr(data_file))
     corpus_as_words_and_tags = []
     for sentence in corpus:
@@ -20,32 +44,50 @@ def load_unordered_data(path_to_data):
         tags = []
         for entry in sentence:
             word = entry["form"]
-            tag = entry["xpostag"]
-            tag_set.add(tag)
+            tag = entry["upostag"]
+            if tag == '_':
+                continue
             words.append(word)
             tags.append(tag)
+
         words = tuple(words)
         tags = tuple(tags)
         corpus_as_words_and_tags.append((words, tags))
-    return corpus_as_words_and_tags, tag_set
+    return corpus_as_words_and_tags
 
 
 def load_data_as_pandas(path_to_data):
-    df, tag_set = load_unordered_data(path_to_data)
+    df = load_unordered_data(path_to_data)
     df = pd.DataFrame(df)
     df.columns = ["words", "tags"]
-    return df, tag_set
+    return df
 
 
 def load_train_test_validation_sets(path_to_data):
-    my_data, tag_set = load_data_as_pandas(path_to_data)
-    train_test, validation_set = train_test_split(my_data, test_size=0.2)
-    return train_test, validation_set, tag_set
+    my_data = load_data_as_pandas(path_to_data)
+    train_test, validation_set = train_test_split(my_data, test_size=0.2, random_state=1)
+    return train_test, validation_set
+
+
+def load_sentences(language='en', action='train', override=False) -> List[Sentence]:
+    path = './data/'+language+'_'+action
+    if not os.path.exists(path+'.pkl') or override:
+        words_tags = load_unordered_data(path + '.conllu')
+
+        print('Loading fasttext encoder for', language)
+        encoder = gensim.models.KeyedVectors.load_word2vec_format("./wiki."+language+".align.vec")
+        print('Finished loading')
+
+        result = [Sentence(words, tags, encoder) for words, tags in words_tags]
+        with open(path+'.pkl', 'wb') as f:
+            pickle.dump(result, f)
+        return result
+    with open(path + '.pkl', 'rb') as f:
+        return pickle.load(f)
 
 
 class WordsDataset(Dataset):
-    def __init__(self, dataframe, tag_set, mode=None):
-        self.tag_set = tag_set
+    def __init__(self, dataframe,mode=None):
         self.data = dataframe
         self.mode = mode
 
@@ -70,7 +112,7 @@ class WordsDataset(Dataset):
         row_to_return = list(original_row)
         tags = list(row_to_return[1])
         for index in indexes:
-            tags[index] = random.sample(self.tag_set, 1)[0]
+            tags[index] = random.sample(ALL_TAGS, 1)[0]
         row_to_return[1] = tags
         return tuple(row_to_return)
 
@@ -79,8 +121,8 @@ if __name__ == '__main__':
 
     path_to_data = "train.conllu"
     path_to_model = "cc.en.300.bin"
-    x, y, tag_set = load_train_test_validation_sets(path_to_data)
-    my_dataset = WordsDataset(x, tag_set)
+    x, y = load_train_test_validation_sets(path_to_data)
+    my_dataset = WordsDataset(x)
 
     for item in my_dataset[16]:
         print(item)
