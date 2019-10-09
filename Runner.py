@@ -1,6 +1,6 @@
 from TaggingNN import TaggingNN
 from ScoringNN import ScoringNN
-from English_only.Preprocessing import load_sentences, ALL_TAGS, INT_TO_TAG
+from English_only.Preprocessing import load_sentences, ALL_TAGS, INT_TO_TAG, Sentence
 import mlrose
 from functools import partial
 from itertools import product

@@ -14,7 +14,7 @@ BATCH_SIZE = 20
 BOOTSTRAPPING_FACTOR = 2
 ALL_TAGS = ['ADJ', 'ADP', 'ADV', 'AUX', 'CCONJ', 'DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON', 'PROPN', 'PUNCT',
             'SCONJ', 'SYM', 'VERB', 'X']
-
+ROOT_PATH = os.path.realpath(os.path.dirname(os.path.dirname(__file__)))
 TAG_TO_INT = {tag: i for i, tag in enumerate(ALL_TAGS)}
 INT_TO_TAG = {v: k for k, v in TAG_TO_INT.items()}
 
@@ -24,15 +24,23 @@ class Sentence:
         self.words = words
         self.tags = tags
         self.X = []
+        self.Y = []
         for word in words:
-            if word in encoder.wv.vocab:
-                self.X.append(encoder.wv[word])
+            word = word.lower()
+            if word in encoder.vocab:
+                self.X.append(encoder[word])
             else:
-                self.X.append(np.array(encoder.wv.vector_size))
+                return
         self.Y = np.array([TAG_TO_INT[x] for x in tags])
 
     def __len__(self):
         return len(self.words)
+
+    def encode(self, encoder):
+        self.X = []
+        for word in self.words:
+            word = word.lower()
+            self.X.append(encoder[word])
 
 
 def load_unordered_data(path_to_data):
@@ -45,14 +53,15 @@ def load_unordered_data(path_to_data):
         for entry in sentence:
             word = entry["form"]
             tag = entry["upostag"]
-            if tag == '_':
-                continue
+            if tag not in ALL_TAGS:
+                words = []
+                break
             words.append(word)
             tags.append(tag)
-
-        words = tuple(words)
-        tags = tuple(tags)
-        corpus_as_words_and_tags.append((words, tags))
+        if words:
+            words = tuple(words)
+            tags = tuple(tags)
+            corpus_as_words_and_tags.append((words, tags))
     return corpus_as_words_and_tags
 
 
@@ -70,20 +79,65 @@ def load_train_test_validation_sets(path_to_data):
 
 
 def load_sentences(language='en', action='train', override=False) -> List[Sentence]:
-    path = './data/'+language+'_'+action
-    if not os.path.exists(path+'.pkl') or override:
-        words_tags = load_unordered_data(path + '.conllu')
+    path = os.path.join(ROOT_PATH, 'data', language+'_'+action)
+    if not os.path.exists(path+'_encoded.pkl') or override:
+        with open(path+'.pkl', 'rb') as f:
+            sentences = pickle.load(f)
 
         print('Loading fasttext encoder for', language)
         encoder = gensim.models.KeyedVectors.load_word2vec_format("./wiki."+language+".align.vec")
         print('Finished loading')
 
-        result = [Sentence(words, tags, encoder) for words, tags in words_tags]
-        with open(path+'.pkl', 'wb') as f:
-            pickle.dump(result, f)
-        return result
-    with open(path + '.pkl', 'rb') as f:
+        for s in sentences:
+            s.encode(encoder)
+
+        with open(path+'_encoded.pkl', 'wb') as f:
+            pickle.dump(sentences, f)
+        return sentences
+
+    with open(path + '_encoded.pkl', 'rb') as f:
         return pickle.load(f)
+
+
+def filter_all_data(data_path=os.path.join(ROOT_PATH, 'ud-treebanks'), language_full='English', language_short='en',
+                    train_size=0.8):
+    corpus_as_words_and_tags = []
+    for foldername in os.listdir(data_path):
+        if not foldername.startswith('UD_'+language_full):
+            continue
+        for filename in os.listdir(os.path.join(data_path, foldername)):
+            if not filename.endswith('.conllu'):
+                continue
+            corpus_as_words_and_tags += load_unordered_data(os.path.join(data_path, foldername, filename))
+    print('Total sentences: ', len(corpus_as_words_and_tags))
+    print('Loading fasttext encoder for', language_full)
+    encoder = gensim.models.KeyedVectors.load_word2vec_format(os.path.join(ROOT_PATH, "wiki." + language_short + ".align.vec"))
+    print('Finished loading')
+    result = []
+    for words, tags in corpus_as_words_and_tags:
+        sent = Sentence(words, tags, encoder)
+        if len(sent.Y):
+            result.append(sent)
+    print('Total sentences after filtering: ', len(result))
+    del encoder
+    from sklearn.model_selection import train_test_split
+    train, test = train_test_split(result, train_size=train_size)
+    del result
+    time.sleep(3)
+    if language_short == 'en':
+        with open(os.path.join(ROOT_PATH, 'data', language_short+'_train_encoded.pkl'), 'wb') as f:
+            pickle.dump(train, f)
+        for s in train:
+            s.X = []
+        with open(os.path.join(ROOT_PATH, 'data', language_short+'_train.pkl'), 'wb') as f:
+            pickle.dump(train, f)
+
+    with open(os.path.join(ROOT_PATH, 'data', language_short+'_test_encoded.pkl'), 'wb') as f:
+        pickle.dump(test, f)
+    for s in test:
+        s.X = []
+    with open(os.path.join(ROOT_PATH, 'data', language_short+'_test.pkl'), 'wb') as f:
+        pickle.dump(test, f)
 
 
 class WordsDataset(Dataset):
