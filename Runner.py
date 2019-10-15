@@ -55,7 +55,7 @@ class Runner:
                 continue
             print('Accuracy for tag', tag, 'is:', tag_results[tag][0]/tag_results[tag][1])
 
-        with open('results/' + self.search_class_name+ '.pkl', 'wb') as f:
+        with open('results/' + self.search_class_name + '.pkl', 'wb') as f:
             pickle.dump(pair_results, f)
 
 
@@ -64,4 +64,4 @@ if __name__ == "__main__":
     algorithm_args = {'restarts': 0, 'max_iters': 1000, 'random_state': 1}
     #train_sentences = load_sentences('fr', 'test', False)
     runner = Runner(algorithm_name, algorithm_args)
-    runner.run('en')
+    runner.run('ru')

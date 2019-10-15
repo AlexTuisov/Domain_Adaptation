@@ -43,6 +43,10 @@ class Sentence:
             self.X.append(encoder[word])
 
 
+class TrainSentence(Sentence):
+    pass
+
+
 def load_unordered_data(path_to_data):
     data_file = open(path_to_data, "r", encoding="utf-8")
     corpus = list(conllu.parse_incr(data_file))

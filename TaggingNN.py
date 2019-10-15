@@ -1,5 +1,5 @@
 from typing import List
-from Preprocessing import Sentence, ALL_TAGS
+from English_only.Preprocessing import Sentence, ALL_TAGS
 from sklearn.metrics import accuracy_score
 import os
 import numpy as np
