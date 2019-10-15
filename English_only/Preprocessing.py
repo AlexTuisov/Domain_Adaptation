@@ -44,7 +44,8 @@ class Sentence:
 
 
 class TrainSentence(Sentence):
-    pass
+    def __init__(self):
+        pass
 
 
 def load_unordered_data(path_to_data):
