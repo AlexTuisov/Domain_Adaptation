@@ -9,9 +9,10 @@ from typing import List
 import os
 import gensim
 import pickle
+import copy
 
-BATCH_SIZE = 20
-BOOTSTRAPPING_FACTOR = 2
+# BATCH_SIZE = 20
+BOOTSTRAPPING_FACTOR = 1
 ALL_TAGS = ['ADJ', 'ADP', 'ADV', 'AUX', 'CCONJ', 'DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON', 'PROPN', 'PUNCT',
             'SCONJ', 'SYM', 'VERB', 'X']
 ROOT_PATH = os.path.realpath(os.path.dirname(os.path.dirname(__file__)))
@@ -43,9 +44,17 @@ class Sentence:
             self.X.append(encoder[word])
 
 
-class TrainSentence(Sentence):
-    def __init__(self):
-        pass
+# class TrainSentence(Sentence):
+#     def __init__(self, words, tags, true_tags, encoder):
+#         super(TrainSentence, self).__init__(words, tags, encoder)
+#         self.true_tags = true_tags
+#         self.true_Y = np.array([TAG_TO_INT[x] for x in true_tags])
+#         correct_tags_count = 0
+#         assert tags
+#         for i, tag in enumerate(tags):
+#             if tag == true_tags[i]:
+#                 correct_tags_count += 1
+#         self.accuracy = correct_tags_count / len(tags)
 
 
 def load_unordered_data(path_to_data):
@@ -102,6 +111,30 @@ def load_sentences(language='en', action='train', override=False) -> List[Senten
 
     with open(path + '_encoded.pkl', 'rb') as f:
         return pickle.load(f)
+
+
+# def load_train_sentences(language='en', action='train', override=False) -> List[TrainSentence]:
+#     list_of_regular_sentences = load_sentences(language, action, override)
+#     return_list = []
+#     encoder = gensim.models.KeyedVectors.load_word2vec_format("./wiki." + language + ".align.vec")
+#     for a_sentence in list_of_regular_sentences:
+#         list_of_mutated_sentences = mutate(a_sentence, encoder)
+#         return_list.extend(list_of_mutated_sentences)
+#     return return_list
+#
+#
+# def mutate(sentence: Sentence, encoder) -> List[TrainSentence]:
+#     output = []
+#     true_tags = sentence.tags
+#     for num_of_errors in range(len(sentence.tags) + 1):
+#         for _ in range(BOOTSTRAPPING_FACTOR):
+#             indexes = random.sample(list(range(len(sentence.tags))), num_of_errors)
+#             tags = list(true_tags)
+#             for index in indexes:
+#                 tags[index] = random.sample(ALL_TAGS, 1)[0]
+#                 mutated_sentence = TrainSentence(sentence.words, tags, true_tags, encoder)
+#                 output.append(mutated_sentence)
+#     return output
 
 
 def filter_all_data(data_path=os.path.join(ROOT_PATH, 'ud-treebanks'), language_full='English', language_short='en',
