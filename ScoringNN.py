@@ -1,5 +1,6 @@
+import time
 from typing import List
-from English_only.Preprocessing import Sentence, TAG_TO_INT, ALL_TAGS
+from English_only.Preprocessing import Sentence, TAG_TO_INT, ALL_TAGS, load_sentences
 from sklearn.metrics import accuracy_score
 import os
 import numpy as np
@@ -9,16 +10,18 @@ import random
 
 NUMBER_OF_TAGS = len(ALL_TAGS)
 TAG_EMBEDDING_DIMENSION = 8
-LEARNING_RATE = 0.001
-NUM_OF_LAYERS = 1
+LEARNING_RATE = 0.0001
+NUM_OF_LAYERS = 2
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 WORDS_EMBEDDING_DIMENSION = 300
-NUMBER_OF_EPOCHS = 10
+NUMBER_OF_EPOCHS = 500
+LARGE_INT = 9999999999
+STOP_TRAINING_CRITERION = 3
 
 
 class ScoringNN:
     def __init__(self):
-        self.criterion = torch.nn.MSELoss()
+        self.criterion = torch.nn.L1Loss()
         self.model = GRUPredictor(WORDS_EMBEDDING_DIMENSION, NUMBER_OF_TAGS, TAG_EMBEDDING_DIMENSION)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
         self.backup_path = 'trainNN_model.backup'
@@ -36,22 +39,39 @@ class ScoringNN:
 
     def train(self, sentences: List[Sentence]):
         self.model.to(DEVICE)
+        self.model.train()
+        best_loss = LARGE_INT
+        count_of_fails = 0
         for epoch in range(NUMBER_OF_EPOCHS):
+            print(f"starting epoch {epoch}")
             random.shuffle(sentences)
-            self.train_one_epoch(sentences)
-            self.save_backup()
-            self.trained = True
+            loss = self.train_one_epoch(sentences)
+            if loss < best_loss:
+                best_loss = loss
+                count_of_fails = 0
+                self.save_backup()
+            else:
+                count_of_fails += 1
+            if count_of_fails >= STOP_TRAINING_CRITERION:
+                print(f"stopped at epoch {epoch}")
+                break
+        self.trained = True
 
     def train_one_epoch(self, sentences):
+        start = time.time()
         cumulative_loss = 0
         for sentence in sentences:
-            length_of_sentence = len(sentence)
-            output, loss = self.train_one_example(sentence)
-        print("done AN EPOCH")
+            loss = self.train_one_example(sentence)
+            cumulative_loss += loss
+        finish = time.time()
+        print(f"finished, cumulative loss is {cumulative_loss},"
+              f" average loss is {cumulative_loss/len(sentences)},"
+              f"  took {finish - start} seconds")
+        print("-----------------------")
+        return cumulative_loss
 
     def train_one_example(self, sentence):
-        if random.random() < 0.0001:
-            print("training an example!")
+        self.optimizer.zero_grad()
         tags, true_tags, accuracy = self.mutate(sentence)
         sentence_as_tensor = torch.FloatTensor(sentence.X).unsqueeze(0).to(DEVICE)
         tags_as_tensor = self.tags_to_tensor(tags).unsqueeze(0).to(DEVICE)
@@ -64,11 +84,16 @@ class ScoringNN:
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1000)
         self.optimizer.step()
-        return output, loss.item()
+        return loss.item()
 
-    def score(self, sentence: Sentence, tags: np.array) -> float:
+    def score(self, sentence: Sentence, tags: List[str]) -> float:
         # return score of given sentence with given tags
-        return accuracy_score(sentence.Y, tags)
+        sentence_as_tensor = torch.FloatTensor(sentence.X).unsqueeze(0).to(DEVICE)
+        tags_as_tensor = self.tags_to_tensor(tags).unsqueeze(0).to(DEVICE)
+        hidden = self.model.initHidden(sentence_as_tensor.size()[0]).to(DEVICE)
+        output = self.model(sentence_as_tensor, tags_as_tensor, hidden)
+        output = output[-1].item()
+        return output
 
     def mutate(self, sentence: Sentence):
         true_tags = sentence.tags
@@ -100,20 +125,32 @@ class GRUPredictor(nn.Module):
         self.hidden_size = words_size + tags_embedding_size
         self.gru = nn.GRU(self.hidden_size, self.hidden_size, num_layers=NUM_OF_LAYERS, batch_first=True)
         self.linear = nn.Linear(self.hidden_size, 1)
+        self.sigmoid = nn.Sigmoid()
         self.name = "my little net"
 
-    def forward(self, embedded_word, tag, hidden):
+    def forward(self, embedded_sentence, tag, hidden):
         tag = tag.type(torch.LongTensor).to(DEVICE)
         embedded_tags = self.embedding(tag)
-        gru_input = torch.cat([embedded_word, embedded_tags], 2)
+        gru_input = torch.cat([embedded_sentence, embedded_tags], 2)
         output, hidden = self.gru(gru_input, hidden)
         output = self.linear(output[-1])
+        output = self.sigmoid(output)
         return output
 
     def initHidden(self, batch_size):
         return torch.zeros(NUM_OF_LAYERS, batch_size, self.hidden_size).to(DEVICE)
 
 
-
 if __name__ == '__main__':
     my_test_scoring_nn = ScoringNN()
+    my_test_scoring_nn.load_backup()
+    my_test_scoring_nn.model.to(DEVICE)
+    list_of_sentences = load_sentences("en", 'test', False)
+    cumulative_error = 0
+    for sentence in list_of_sentences:
+        tags, true_tags, accuracy = my_test_scoring_nn.mutate(sentence)
+        prediction = my_test_scoring_nn.score(sentence, tags)
+        error = (abs(accuracy - prediction))
+        cumulative_error += error
+
+    print(f"cumulative error was {cumulative_error}, average test error was {cumulative_error/len(list_of_sentences)}")

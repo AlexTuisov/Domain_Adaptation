@@ -64,4 +64,4 @@ if __name__ == "__main__":
     algorithm_args = {'restarts': 0, 'max_iters': 1000, 'random_state': 1}
     #train_sentences = load_sentences('fr', 'test', False)
     runner = Runner(algorithm_name, algorithm_args)
-    runner.run('ru')
+    runner.run()
