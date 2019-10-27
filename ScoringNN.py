@@ -1,6 +1,6 @@
 import time
 from typing import List
-from English_only.Preprocessing import Sentence, TAG_TO_INT, ALL_TAGS, load_sentences
+from English_only.Preprocessing import Sentence, TAG_TO_INT, INT_TO_TAG, ALL_TAGS, load_sentences
 from sklearn.metrics import accuracy_score
 import os
 import numpy as np
@@ -9,14 +9,16 @@ import torch.nn as nn
 import random
 
 NUMBER_OF_TAGS = len(ALL_TAGS)
-TAG_EMBEDDING_DIMENSION = 8
+TAG_EMBEDDING_DIMENSION = 4
 LEARNING_RATE = 0.0001
 NUM_OF_LAYERS = 2
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 WORDS_EMBEDDING_DIMENSION = 300
-NUMBER_OF_EPOCHS = 500
+MAX_NUMBER_OF_EPOCHS = 500
 LARGE_INT = 9999999999
 STOP_TRAINING_CRITERION = 3
+HIDDEN_LAYER_SIZE = 304
+BIDIRECTIONAL = True
 
 
 class ScoringNN:
@@ -42,7 +44,7 @@ class ScoringNN:
         self.model.train()
         best_loss = LARGE_INT
         count_of_fails = 0
-        for epoch in range(NUMBER_OF_EPOCHS):
+        for epoch in range(MAX_NUMBER_OF_EPOCHS):
             print(f"starting epoch {epoch}")
             random.shuffle(sentences)
             loss = self.train_one_epoch(sentences)
@@ -86,10 +88,11 @@ class ScoringNN:
         self.optimizer.step()
         return loss.item()
 
-    def score(self, sentence: Sentence, tags: List[str]) -> float:
+    def score(self, sentence: Sentence, tags: List[int]) -> float:
+        tags_as_str = [INT_TO_TAG[x] for x in tags]
         # return score of given sentence with given tags
         sentence_as_tensor = torch.FloatTensor(sentence.X).unsqueeze(0).to(DEVICE)
-        tags_as_tensor = self.tags_to_tensor(tags).unsqueeze(0).to(DEVICE)
+        tags_as_tensor = self.tags_to_tensor(tags_as_str).unsqueeze(0).to(DEVICE)
         hidden = self.model.initHidden(sentence_as_tensor.size()[0]).to(DEVICE)
         output = self.model(sentence_as_tensor, tags_as_tensor, hidden)
         output = output[-1].item()
@@ -122,9 +125,10 @@ class GRUPredictor(nn.Module):
         self.tags_size = tags_size
         self.tags_embedding_size = tags_embedding_size
         self.embedding = nn.Embedding(tags_size, tags_embedding_size)
-        self.hidden_size = words_size + tags_embedding_size
-        self.gru = nn.GRU(self.hidden_size, self.hidden_size, num_layers=NUM_OF_LAYERS, batch_first=True)
-        self.linear = nn.Linear(self.hidden_size, 1)
+        self.input_size = words_size + tags_embedding_size
+        self.gru = nn.GRU(input_size=self.input_size, hidden_size=HIDDEN_LAYER_SIZE, num_layers=NUM_OF_LAYERS,
+                          batch_first=True, bidirectional=BIDIRECTIONAL)
+        self.linear = nn.Linear((int(BIDIRECTIONAL)+1) * HIDDEN_LAYER_SIZE, 1)
         self.sigmoid = nn.Sigmoid()
         self.name = "my little net"
 
@@ -138,7 +142,7 @@ class GRUPredictor(nn.Module):
         return output
 
     def initHidden(self, batch_size):
-        return torch.zeros(NUM_OF_LAYERS, batch_size, self.hidden_size).to(DEVICE)
+        return torch.zeros((int(BIDIRECTIONAL) + 1) * NUM_OF_LAYERS, batch_size, HIDDEN_LAYER_SIZE).to(DEVICE)
 
 
 if __name__ == '__main__':
