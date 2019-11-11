@@ -66,7 +66,7 @@ class Runner:
             total += tag_results[tag][1]
         print('Total accuracy: ', hits/total)
         os.makedirs('results', exist_ok=True)
-        with open('results/' + self.search_class_name + str(self.search_params).replace('\'', '') + '.json', 'w') as f:
+        with open('results/' + test_language + self.search_class_name + str(self.search_params).replace('\'', '') + '.json', 'w') as f:
             json.dump(pair_results, f)
 
 
@@ -80,4 +80,4 @@ if __name__ == "__main__":
     #train_sentences = load_sentences('fr', 'test', False)
     runner = Runner(algorithm_name, algorithm_args)
     # We kinda don't have validation in russian, so we need to tune model using english test set
-    runner.run('en')
+    runner.run('ru')
