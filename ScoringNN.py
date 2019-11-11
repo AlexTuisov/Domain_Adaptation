@@ -7,7 +7,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import random
+import seaborn as sns
+import matplotlib.pyplot as plt
 
+import pandas as pd
 NUMBER_OF_TAGS = len(ALL_TAGS)
 TAG_EMBEDDING_DIMENSION = 4
 LEARNING_RATE = 0.0001
@@ -19,6 +22,7 @@ LARGE_INT = 9999999999
 STOP_TRAINING_CRITERION = 3
 HIDDEN_LAYER_SIZE = 304
 BIDIRECTIONAL = True
+MUTATIONS = 1
 
 
 class ScoringNN:
@@ -28,6 +32,7 @@ class ScoringNN:
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
         self.backup_path = 'trainNN_model.backup'
         self.trained = False
+        self.load_backup()
 
     def load_backup(self):
         if os.path.exists(self.backup_path):
@@ -35,11 +40,14 @@ class ScoringNN:
             self.model.load_state_dict(torch.load(self.backup_path))
             self.model.eval()
             self.trained = True
+            self.model.to(DEVICE)
 
     def save_backup(self):
         torch.save(self.model.state_dict(), self.backup_path)
 
     def train(self, sentences: List[Sentence]):
+        self.model = GRUPredictor(WORDS_EMBEDDING_DIMENSION, NUMBER_OF_TAGS, TAG_EMBEDDING_DIMENSION)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
         self.model.to(DEVICE)
         self.model.train()
         best_loss = LARGE_INT
@@ -98,19 +106,17 @@ class ScoringNN:
         output = output[-1].item()
         return output
 
-    def mutate(self, sentence: Sentence):
+    def mutate(self, sentence: Sentence, num_of_errors=-1):
         true_tags = sentence.tags
-        num_of_errors = random.choice(range(len(sentence.tags) + 1))
+        if num_of_errors == -1:
+            num_of_errors = random.choice(range(len(sentence.tags) + 1))
+        else:
+            num_of_errors = min(len(sentence), num_of_errors)
         indexes = random.sample(list(range(len(sentence.tags))), num_of_errors)
         tags = list(true_tags)
         for index in indexes:
             tags[index] = random.sample(ALL_TAGS, 1)[0]
-        correct_tags_count = 0
-        for i, tag in enumerate(tags):
-            if tag == true_tags[i]:
-                correct_tags_count += 1
-        accuracy = correct_tags_count / len(tags)
-        return tags, true_tags, accuracy
+        return tags, true_tags, accuracy_score(true_tags, tags)
 
     def tags_to_tensor(self, tags: List[str]) -> torch.Tensor:
         a = [TAG_TO_INT[x] for x in tags]
@@ -144,17 +150,57 @@ class GRUPredictor(nn.Module):
     def initHidden(self, batch_size):
         return torch.zeros((int(BIDIRECTIONAL) + 1) * NUM_OF_LAYERS, batch_size, HIDDEN_LAYER_SIZE).to(DEVICE)
 
-
-if __name__ == '__main__':
+def plot_accuracies(language='en'):
     my_test_scoring_nn = ScoringNN()
     my_test_scoring_nn.load_backup()
     my_test_scoring_nn.model.to(DEVICE)
-    list_of_sentences = load_sentences("en", 'test', False)
-    cumulative_error = 0
-    for sentence in list_of_sentences:
-        tags, true_tags, accuracy = my_test_scoring_nn.mutate(sentence)
-        prediction = my_test_scoring_nn.score(sentence, tags)
-        error = (abs(accuracy - prediction))
-        cumulative_error += error
+    list_of_sentences = load_sentences(language, 'test', False)
+    start = time.time()
+    accuracies = []
+    predictions = []
+    for sentence in list_of_sentences[:1000]:
+        for i in range(MUTATIONS):
+            tags, true_tags, accuracy = my_test_scoring_nn.mutate(sentence)
+            prediction = my_test_scoring_nn.score(sentence, [TAG_TO_INT[x] for x in tags])
+            accuracies.append(accuracy)
+            predictions.append(prediction)
+    print(len(accuracies), 'took', time.time()-start, 'seconds')
 
-    print(f"cumulative error was {cumulative_error}, average test error was {cumulative_error/len(list_of_sentences)}")
+    sns.set()
+    df = pd.DataFrame(columns=['original_accuracy', 'predicted_value'], data=zip(accuracies, predictions))
+    df['errors'] = df.predicted_value - df.original_accuracy
+    df['rounded_accuracy'] = df.original_accuracy.round(1)
+
+    sns.regplot(x='original_accuracy', y='predicted_value', data=df, ci=95)
+    plt.plot([0, 1], [0, 1], linewidth=2, color='green')
+    plt.show()
+
+    sns.boxplot(x='rounded_accuracy', y='errors', data=df)
+    plt.show()
+
+    #print(f"cumulative error was {cumulative_error}, average test error was {cumulative_error/len(list_of_sentences)}")
+
+def check_monotonity(language='en'):
+    my_test_scoring_nn = ScoringNN()
+    my_test_scoring_nn.load_backup()
+    my_test_scoring_nn.model.to(DEVICE)
+    list_of_sentences = load_sentences(language, 'test', False)
+    #print(np.mean([len(x) for x in list_of_sentences]))
+    for sentence in list_of_sentences[:100]:
+        errors = [0]
+        predictions = [my_test_scoring_nn.score(sentence, sentence.Y)]
+
+        for num_errors in range(1, 10):
+            for i in range(20):
+                tags, true_tags, accuracy = my_test_scoring_nn.mutate(sentence, num_errors)
+                prediction = my_test_scoring_nn.score(sentence, [TAG_TO_INT[x] for x in tags])
+                errors.append(num_errors)
+                predictions.append(prediction)
+        df = pd.DataFrame(columns=['num_errors', 'predicted_value'], data=zip(errors, predictions))
+        sns.catplot(x='num_errors', y='predicted_value', data=df)
+        plt.show()
+
+
+if __name__ == '__main__':
+    #plot_accuracies('ru')
+    check_monotonity('ru')

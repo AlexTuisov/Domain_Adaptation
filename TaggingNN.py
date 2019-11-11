@@ -4,6 +4,8 @@ from sklearn.metrics import accuracy_score
 import os
 import numpy as np
 
+ACCURACY = 0.5
+
 class TaggingNN:
     """
     This class represents tagging network used to create initial tagging for given sentence
@@ -44,8 +46,8 @@ class TaggingNN:
     def predict(self, sentence: Sentence) -> np.array:
         # Given sentence return list of initial taggings
         # Until Vitaliy implements proper NN I use random labeling based on true labeling
-        result = sentence.Y
+        result = list(sentence.Y)
         for i in range(len(result)):
-            if np.random.uniform() < 0.2:
+            if np.random.uniform(0, 1) < ACCURACY:
                 result[i] = np.random.randint(len(ALL_TAGS))
         return result
