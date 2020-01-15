@@ -7,8 +7,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import random
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 import pandas as pd
 NUMBER_OF_TAGS = len(ALL_TAGS)
@@ -32,7 +30,6 @@ class ScoringNN:
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
         self.backup_path = 'trainNN_model.backup'
         self.trained = False
-        self.load_backup()
 
     def load_backup(self):
         if os.path.exists(self.backup_path):
@@ -150,57 +147,3 @@ class GRUPredictor(nn.Module):
     def initHidden(self, batch_size):
         return torch.zeros((int(BIDIRECTIONAL) + 1) * NUM_OF_LAYERS, batch_size, HIDDEN_LAYER_SIZE).to(DEVICE)
 
-def plot_accuracies(language='en'):
-    my_test_scoring_nn = ScoringNN()
-    my_test_scoring_nn.load_backup()
-    my_test_scoring_nn.model.to(DEVICE)
-    list_of_sentences = load_sentences(language, 'test', False)
-    start = time.time()
-    accuracies = []
-    predictions = []
-    for sentence in list_of_sentences[:1000]:
-        for i in range(MUTATIONS):
-            tags, true_tags, accuracy = my_test_scoring_nn.mutate(sentence)
-            prediction = my_test_scoring_nn.score(sentence, [TAG_TO_INT[x] for x in tags])
-            accuracies.append(accuracy)
-            predictions.append(prediction)
-    print(len(accuracies), 'took', time.time()-start, 'seconds')
-
-    sns.set()
-    df = pd.DataFrame(columns=['original_accuracy', 'predicted_value'], data=zip(accuracies, predictions))
-    df['errors'] = df.predicted_value - df.original_accuracy
-    df['rounded_accuracy'] = df.original_accuracy.round(1)
-
-    sns.regplot(x='original_accuracy', y='predicted_value', data=df, ci=95)
-    plt.plot([0, 1], [0, 1], linewidth=2, color='green')
-    plt.show()
-
-    sns.boxplot(x='rounded_accuracy', y='errors', data=df)
-    plt.show()
-
-    #print(f"cumulative error was {cumulative_error}, average test error was {cumulative_error/len(list_of_sentences)}")
-
-def check_monotonity(language='en'):
-    my_test_scoring_nn = ScoringNN()
-    my_test_scoring_nn.load_backup()
-    my_test_scoring_nn.model.to(DEVICE)
-    list_of_sentences = load_sentences(language, 'test', False)
-    #print(np.mean([len(x) for x in list_of_sentences]))
-    for sentence in list_of_sentences[:100]:
-        errors = [0]
-        predictions = [my_test_scoring_nn.score(sentence, sentence.Y)]
-
-        for num_errors in range(1, 10):
-            for i in range(20):
-                tags, true_tags, accuracy = my_test_scoring_nn.mutate(sentence, num_errors)
-                prediction = my_test_scoring_nn.score(sentence, [TAG_TO_INT[x] for x in tags])
-                errors.append(num_errors)
-                predictions.append(prediction)
-        df = pd.DataFrame(columns=['num_errors', 'predicted_value'], data=zip(errors, predictions))
-        sns.catplot(x='num_errors', y='predicted_value', data=df)
-        plt.show()
-
-
-if __name__ == '__main__':
-    #plot_accuracies('ru')
-    check_monotonity('ru')

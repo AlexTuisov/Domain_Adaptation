@@ -15,7 +15,7 @@ class TaggingNN:
         self.backup_path = 'trainNN_model.backup'
         self.trained = False
 
-    def _load_backup(self):
+    def load_backup(self):
         if os.path.exists(self.backup_path):
             # load
             self.trained = True
